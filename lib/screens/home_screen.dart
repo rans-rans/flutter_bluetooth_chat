@@ -2,6 +2,8 @@ import 'package:all_bluetooth/all_bluetooth.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 
+import '../main.dart';
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -10,7 +12,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  final allBluetooth = AllBluetooth();
+  final bondedDevices = ValueNotifier(<BluetoothDevice>[]);
   @override
   void initState() {
     super.initState();
@@ -26,36 +28,71 @@ class _HomeScreenState extends State<HomeScreen> {
         stream: allBluetooth.streamBluetoothState,
         builder: (context, snapshot) {
           final bluetoothOn = snapshot.data ?? false;
-          print(bluetoothOn);
           return Scaffold(
             appBar: AppBar(
               title: const Text("Bluetooth Connect"),
             ),
-            floatingActionButton: const FloatingActionButton(
-              onPressed: null,
-              backgroundColor: Colors.grey,
-              child: Icon(Icons.wifi_tethering),
+            floatingActionButton: FloatingActionButton(
+              onPressed: switch (bluetoothOn) {
+                false => null,
+                true => () {
+                    allBluetooth.startBluetoothServer();
+                  },
+              },
+              backgroundColor:
+                  bluetoothOn ? Theme.of(context).primaryColor : Colors.grey,
+              child: const Icon(Icons.wifi_tethering),
             ),
-            body: const Padding(
-              padding: EdgeInsets.all(8.0),
+            body: Padding(
+              padding: const EdgeInsets.all(8.0),
               child: Column(
                 children: [
                   Row(
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
                       Text(
-                        "off",
-                        style: TextStyle(color: Colors.red),
+                        switch (bluetoothOn) {
+                          true => "ON",
+                          false => "off",
+                        },
+                        style: TextStyle(
+                            color: bluetoothOn ? Colors.green : Colors.red),
                       ),
                       ElevatedButton(
-                        onPressed: null,
-                        child: Text("Bonded Devices"),
+                        onPressed: switch (bluetoothOn) {
+                          false => null,
+                          true => () async {
+                              final devices = await allBluetooth.getBondedDevices();
+                              bondedDevices.value = devices;
+                            },
+                        },
+                        child: const Text("Bonded Devices"),
                       ),
                     ],
                   ),
-                  Center(
-                    child: Text("Turn bluetooth on"),
-                  )
+                  if (!bluetoothOn)
+                    const Center(
+                      child: Text("Turn bluetooth on"),
+                    ),
+                  ValueListenableBuilder(
+                      valueListenable: bondedDevices,
+                      builder: (context, devices, child) {
+                        return Expanded(
+                          child: ListView.builder(
+                            itemCount: bondedDevices.value.length,
+                            itemBuilder: (context, index) {
+                              final device = devices[index];
+                              return ListTile(
+                                title: Text(device.name),
+                                subtitle: Text(device.address),
+                                onTap: () {
+                                  allBluetooth.connectToDevice(device.address);
+                                },
+                              );
+                            },
+                          ),
+                        );
+                      })
                 ],
               ),
             ),
